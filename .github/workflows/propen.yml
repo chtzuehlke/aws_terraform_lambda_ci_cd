@@ -1,0 +1,61 @@
+name: "PR open"
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-16.04
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Apply (PR workspace)
+        working-directory: ./terraform
+        run: |
+          terraform init    
+
+          PR_BRANCH="${{ github.head_ref }}"
+          echo "Terraform workspace: $PR_BRANCH"
+
+          terraform workspace new $PR_BRANCH || true
+          terraform workspace select $PR_BRANCH
+          terraform apply -auto-approve
+
+      - name: Terraform output URL (PR workspace)
+        working-directory: ./terraform
+        id: urldev
+        run: terraform output url
+
+      - name: Test Endpoint (PR workspace)
+        run: |
+          sleep 10
+          ./tests/integration_test.sh ${{ steps.urldev.outputs.stdout }}
+
+      - name: The job has succeeded
+        if: ${{ success() }}
+        uses: mshick/add-pr-comment@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          message: |
+            Integration test success: ${{ steps.urldev.outputs.stdout }}
+          allow-repeats: true
+
+      - name: The job has failed
+        if: ${{ failure() }}
+        uses: mshick/add-pr-comment@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          message: |
+            Terraform OR integration test failed: ${{ steps.urldev.outputs.stdout }}
+          allow-repeats: true

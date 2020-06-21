@@ -1,0 +1,60 @@
+name: "PR merge"
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "python/**"
+      - "tests/**"
+      - "terraform/**"
+
+jobs:
+  terraform:
+    name: "Terraform"
+    runs-on: ubuntu-16.04
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Apply (dev)
+        working-directory: ./terraform
+        run: |
+          terraform init  
+          terraform workspace new dev || true
+          terraform workspace select dev
+          terraform apply -auto-approve
+
+      - name: Terraform output URL (dev)
+        working-directory: ./terraform
+        id: urldev
+        run: terraform output url
+
+      - name: Test Endpoint (dev)
+        run: |
+          sleep 10
+          ./tests/integration_test.sh ${{ steps.urldev.outputs.stdout }}
+
+      - name: Terraform Apply (test)
+        working-directory: ./terraform
+        run: |
+          terraform workspace new test || true
+          terraform workspace select test
+          terraform destroy -auto-approve && terraform apply -auto-approve
+
+      - name: Terraform output URL (test)
+        working-directory: ./terraform
+        id: urltest
+        run: terraform output url
+
+      - name: Test Endpoint (test)
+        run: |
+          sleep 10
+          ./tests/integration_test.sh ${{ steps.urltest.outputs.stdout }}
