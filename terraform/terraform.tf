@@ -101,6 +101,6 @@ resource "aws_lambda_permission" "example" {
   source_arn    = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${aws_apigatewayv2_api.example.id}/*/*/{proxy+}"
 }
 
-output "url" {
+outputERROR "url" {
   value = aws_apigatewayv2_stage.example.invoke_url
 }
